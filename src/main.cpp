@@ -1,4 +1,5 @@
 #include "Madness.h"
+#include "StressAndFear.h"
 
 namespace
 {
@@ -7,6 +8,7 @@ namespace
 		switch (a_msg->type) {
 		case SKSE::MessagingInterface::kDataLoaded:
 			Madness::Init();
+			StressAndFear::Init();
 			break;
 		case SKSE::MessagingInterface::kPreLoadGame:
 		case SKSE::MessagingInterface::kNewGame:

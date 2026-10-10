@@ -19,6 +19,24 @@ Step back into the light and it all fades away within 2.4 seconds.
 
 Everything you see is from the game itself: no new meshes or textures. The whispers are new sounds.
 
+## Stress and Fear
+
+With [Stress and Fear - A Dynamic Sanity System](https://www.nexusmods.com/skyrimspecialedition/mods/116522)
+installed, the dark of Apocrypha also feeds its sanity system (detected automatically, nothing to install):
+
+- Stress grows while you are in the dark: 0.25 per second at first, up to 1.5 per second once the eyes are out.
+- When Hermaeus Mora's eyes open you get the mod's own fear reaction: panicked breathing, its fear image space and
+  +10 stress.
+- When Hermaeus Mora himself appears, it is a trauma: the mod's trauma line and +25 stress.
+
+It uses Stress and Fear's own stress potions, so the mod shows its usual messages. Its MCM switches for stress and fear
+are respected.
+
+## For other mods
+
+Whispers of Apocrypha tells other SKSE plugins about the dark through SKSE messages (sender `WhispersOfApocrypha`):
+once a second in the dark, on every madness stage change and when Hermaeus Mora appears. See `src/API.h`.
+
 ## Requirements
 
 - Skyrim Anniversary Edition (1.6.1130+ / 1.7) with Dragonborn

@@ -1,6 +1,8 @@
 #include "Madness.h"
 
+#include "API.h"
 #include "Papyrus.h"
+#include "StressAndFear.h"
 
 #include <mutex>
 #include <numbers>
@@ -9,6 +11,8 @@ namespace Madness
 {
 	namespace
 	{
+		namespace API = WhispersOfApocrypha::API;
+
 		constexpr auto kPlugin = "WhispersOfApocrypha.esp"sv;
 		constexpr auto kDragonborn = "Dragonborn.esm"sv;
 
@@ -180,7 +184,8 @@ namespace Madness
 
 			RE::NiPointer<RE::ImageSpaceModifierInstanceForm> imod;
 
-			int lastStage{ 0 };
+			int   lastStage{ 0 };
+			float announceIn{ 0.0f };  // the next kDarkness message
 
 			Loop bed, soulCairn, wordWall, heartbeat;
 		};
@@ -318,6 +323,13 @@ namespace Madness
 				}
 			}
 			return result;
+		}
+
+		// to the built-in Stress and Fear support and to the plugins listening (API.h)
+		void Announce(API::Message a_message, void* a_data = nullptr, std::uint32_t a_size = 0)
+		{
+			StressAndFear::Handle(a_message, a_data, a_size);
+			SKSE::GetMessagingInterface()->Dispatch(a_message, a_data, a_size, nullptr);
 		}
 
 		bool IsOurs(RE::TESBoundObject* a_base)
@@ -714,6 +726,7 @@ namespace Madness
 			PlayAt(forms.rumble, 0.8f, nullptr);
 			RE::ShakeCamera(0.4f, a_player->GetPosition(), 2.0f);
 			logs::info("Hermaeus Mora appears (exposure {:.1f} s)", state.exposure);
+			Announce(API::kGaze);
 		}
 
 		// ------------------------------------------------------------------------------------------ update
@@ -773,7 +786,19 @@ namespace Madness
 			if (stage != state.lastStage) {
 				constexpr std::array names{ "clear mind", "whispers", "green nightmare", "eyes" };
 				logs::info("Madness stage {} ({}), exposure {:.1f} s", stage, names[static_cast<std::size_t>(stage)], e);
+				API::StageData data{ stage, state.lastStage };
 				state.lastStage = stage;
+				Announce(API::kStage, &data, sizeof(data));
+			}
+			if (ink > 0) {
+				state.announceIn -= a_delta;
+				if (state.announceIn <= 0.0f) {
+					API::DarknessData data{ ink, stage, e, 1.0f };
+					state.announceIn += 1.0f;
+					Announce(API::kDarkness, &data, sizeof(data));
+				}
+			} else {
+				state.announceIn = 1.0f;
 			}
 
 			UpdateSounds(a_delta, *view);
@@ -920,6 +945,7 @@ namespace Madness
 		state.whisper = state.vision = state.eyes = 0.0f;
 		state.gazeIn = state.gazeT = -1.0f;
 		state.lastStage = 0;
+		state.announceIn = 1.0f;
 		leftovers.clear();
 	}
 
