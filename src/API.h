@@ -17,8 +17,8 @@ namespace WhispersOfApocrypha::API
 
 	enum Dark : std::int32_t
 	{
-		kInkWading = 1,
-		kInkSwimming = 2,
+		kInkWading = 1,     // not sent since 1.3: the ink water no longer counts
+		kInkSwimming = 2,   // not sent since 1.3
 		kBookDarkness = 3,  // a Black Book level, out of the light
 	};
 
@@ -34,7 +34,7 @@ namespace WhispersOfApocrypha::API
 	{
 		std::int32_t dark;      // Dark
 		std::int32_t stage;     // Stage
-		float        exposure;  // seconds spent in the dark (it builds faster while swimming in the ink)
+		float        exposure;  // seconds spent in the dark
 		float        seconds;   // time since the last kDarkness message
 	};
 

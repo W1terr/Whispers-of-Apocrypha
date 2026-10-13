@@ -16,17 +16,16 @@ namespace Madness
 		constexpr auto kPlugin = "WhispersOfApocrypha.esp"sv;
 		constexpr auto kDragonborn = "Dragonborn.esm"sv;
 
-		// Dragonborn.esm: the effects of DLC2abApoWaterDamageActual (25 health/s wading, 70 swimming in the ink)
-		constexpr RE::FormID kInkShallowEffect = 0x2A6CD;   // DLC2ApoWaterDamageEffectShallow
-		constexpr RE::FormID kInkSwimmingEffect = 0x2A6CC;  // DLC2ApoWaterDamageEffectSwimming
 		// Dragonborn.esm: the trigger of the Black Book levels whose script (DLC2DBBookLevelLightTrigSCRIPT) drains
 		// 1% health every 0.25 s while the player's light level is below 30: the darkness outside the moving lights
 		constexpr RE::FormID kBookLightTrigger = 0x1EA7B;  // DLC2DBBookLevelLightTrig
 		constexpr float      kDarkLightLevel = 30.0f;
 		// Dragonborn.esm: Hermaeus Mora's faces full of eyes from the walls of Apocrypha (they emerge when their
-		// fToggleBlend graph variable goes to 1, as DLC2MQ05HermaeusMoraFXScript does), and the eye in the dark water
+		// fToggleBlend graph variable goes to 1, as DLC2MQ05HermaeusMoraFXScript does)
 		constexpr std::array<RE::FormID, 3> kFaces{ 0x37ADA, 0x37AE0, 0x37AE1 };  // HermaeusMorasFace01-03
-		constexpr RE::FormID kInkEye = 0x2454D;                                   // ApoDarkWaterEye01
+		// Dragonborn.esm: the eye in the dark water, which versions before 1.3 raised from the ink: only kept to remove
+		// the ones an old save still has
+		constexpr RE::FormID kInkEye = 0x2454D;  // ApoDarkWaterEye01
 		// Skyrim.esm: Hermaeus Mora himself as he appears in Discerning the Transmundane (DA04 makes him vanish
 		// with the PlayAnim01 graph event)
 		constexpr RE::FormID kHermaeusMora = 0x5AF26;  // FXHermaeusMoraDA04
@@ -55,10 +54,8 @@ namespace Madness
 		constexpr float kVisionFull = 12.0f;
 		constexpr float kEyesStart = 8.0f;
 		constexpr float kEyesFull = 18.0f;
-		constexpr float kSwimmingMult = 1.5f;  // exposure grows faster while swimming in the ink
 		constexpr float kFadeOutTime = 2.4f;   // everything fades over this once out of the dark, then the mind is clear
 		constexpr int   kMaxFaces = 10;
-		constexpr int   kMaxInkEyes = 4;
 		constexpr float kGazeInterval = 35.0f;  // seconds between his visits at full madness (randomized)
 
 		constexpr float kPi = std::numbers::pi_v<float>;
@@ -68,8 +65,6 @@ namespace Madness
 
 		struct Forms
 		{
-			RE::EffectSetting*                       inkShallow{ nullptr };
-			RE::EffectSetting*                       inkSwimming{ nullptr };
 			RE::TESBoundObject*                      bookLightTrigger{ nullptr };
 			std::vector<RE::TESBoundObject*>         faces;
 			RE::TESBoundObject*                      inkEye{ nullptr };
@@ -129,13 +124,12 @@ namespace Madness
 			float             volume{ 0.0f };
 		};
 
-		// one of our placed references: a face, an eye in the ink, or Hermaeus Mora
+		// one of our placed references: a face or Hermaeus Mora
 		struct Apparition
 		{
 			enum class Kind
 			{
 				kFace,
-				kInkEye,
 				kHermaeusMora
 			};
 
@@ -155,8 +149,8 @@ namespace Madness
 		{
 			float exposure{ 0.0f };
 			float presence{ 0.0f };  // 1 in the dark, falls to 0 over kFadeOutTime once out of it
-			int   ink{ 0 };          // 0 out, 1 wading in the ink, 2 swimming in the ink, 3 in a Black Book's darkness
-			float inkIn{ 0.0f };     // the dark is checked every 0.1 s
+			bool  dark{ false };     // in a Black Book's darkness
+			float darkIn{ 0.0f };    // the dark is checked every 0.1 s
 			bool  quiet{ true };     // nothing is playing or showing: the update has nothing to do out of the dark
 
 			// the player's cell, and whether it has the Black Book darkness trigger
@@ -177,7 +171,6 @@ namespace Madness
 			float                   faceIn{ 1.0f };
 			int                     hiddenInARow{ 0 };  // faces placed out of sight one after another
 			bool                    checkSight{ true };  // off if the check never passes (it would hide everything)
-			float                   inkEyeIn{ 1.0f };
 
 			float gazeIn{ -1.0f };  // < 0: not scheduled
 			float gazeT{ -1.0f };   // >= 0: Hermaeus Mora is here, seconds into it
@@ -253,16 +246,8 @@ namespace Madness
 			return View{ camera->world.translate, { m.entry[0][0], m.entry[1][0], m.entry[2][0] } };
 		}
 
-		// standing in damaging water (Apocrypha's ink: DLC2ApocryphaWater / DLC2ApocryphaWaterSmall)
-		bool InInkWater(RE::PlayerCharacter* a_player)
-		{
-			const auto data = a_player->loadedData;
-			const auto water = data ? data->currentWaterType : nullptr;
-			return water && water->flags.any(RE::TESWaterForm::Flag::kCauseDamage) && data->relevantWaterHeight > a_player->GetPositionZ();
-		}
-
 		// Actor::GetLightLevel, what the GetLightLevel condition and Papyrus function return (Anniversary Edition id;
-		// on older runtimes the Black Book darkness is not detected, see Init)
+		// on older runtimes the mod stays off, see Init)
 		float LightLevel(RE::Actor* a_actor)
 		{
 			using func_t = float(RE::Actor*);
@@ -293,36 +278,6 @@ namespace Madness
 			}
 			state.lightLevel = LightLevel(a_player);
 			return state.lightLevel < kDarkLightLevel;
-		}
-
-		// 0 out of the dark, 1 wading in the ink, 2 swimming in it, 3 in a Black Book's darkness
-		int InkState(RE::PlayerCharacter* a_player)
-		{
-			if (InBookDarkness(a_player)) {
-				return 3;
-			}
-			if (InInkWater(a_player)) {
-				return a_player->AsActorState()->IsSwimming() ? 2 : 1;
-			}
-			const auto target = a_player->AsMagicTarget();
-			const auto list = target ? target->GetActiveEffectList() : nullptr;
-			if (!list) {
-				return 0;
-			}
-			int result = 0;
-			for (const auto effect : *list) {
-				if (!effect || effect->flags.any(RE::ActiveEffect::Flag::kInactive, RE::ActiveEffect::Flag::kDispelled)) {
-					continue;
-				}
-				const auto base = effect->GetBaseObject();
-				if (base && base == forms.inkSwimming) {
-					return 2;
-				}
-				if (base && base == forms.inkShallow) {
-					result = 1;
-				}
-			}
-			return result;
 		}
 
 		// to the built-in Stress and Fear support and to the plugins listening (API.h)
@@ -537,34 +492,6 @@ namespace Madness
 			}
 		}
 
-		void SpawnInkEye(RE::PlayerCharacter* a_player, const View& a_view)
-		{
-			const float water = a_player->GetWaterHeight();
-			if (!forms.inkEye || water < a_player->GetPositionZ() - 50.0f || water > a_player->GetPositionZ() + 400.0f) {
-				return;  // no surface near the player
-			}
-			for (int attempt = 0; attempt < 8; ++attempt) {
-				const float  heading = std::atan2(a_view.forward.x, a_view.forward.y) + Random(-100.0f, 100.0f) * kDegree;
-				RE::NiPoint3 position = a_player->GetPosition() + RE::NiPoint3{ std::sin(heading), std::cos(heading), 0.0f } * Random(160.0f, 480.0f);
-				position.z = water;
-				if (Crowded(position, 120.0f)) {
-					continue;
-				}
-				const auto ref = Place(a_player, forms.inkEye, position, Random(0.9f, 1.4f));
-				if (!ref) {
-					return;
-				}
-				Apparition a;
-				a.handle = ref->GetHandle();
-				a.kind = Apparition::Kind::kInkEye;
-				a.life = Random(5.0f, 11.0f);
-				a.size = 40.0f;
-				a.shown = true;
-				state.apparitions.push_back(a);
-				return;
-			}
-		}
-
 		void SummonHermaeusMora(RE::PlayerCharacter* a_player, const View& a_view)
 		{
 			if (!forms.hermaeusMora) {
@@ -601,15 +528,6 @@ namespace Madness
 				if (state.faceIn <= 0.0f) {
 					SpawnFace(a_player, a_view);
 					state.faceIn = std::lerp(3.0f, 0.6f, level) * Random(0.7f, 1.3f);
-				}
-			}
-			// eyes in the ink, only while you stand in it
-			const int inkEyes = (state.ink == 1 || state.ink == 2) && level > 0.02f ? 1 + static_cast<int>(level * static_cast<float>(kMaxInkEyes - 1) + 0.5f) : 0;
-			if (Count(Apparition::Kind::kInkEye) < inkEyes) {
-				state.inkEyeIn -= a_delta;
-				if (state.inkEyeIn <= 0.0f) {
-					SpawnInkEye(a_player, a_view);
-					state.inkEyeIn = std::lerp(4.0f, 1.0f, level) * Random(0.7f, 1.3f);
 				}
 			}
 
@@ -659,18 +577,14 @@ namespace Madness
 						a.watched += a_delta;
 					}
 					// out of the dark everything leaves at once; walking up to a face makes it leave too
-					const bool outOfDark = state.ink == 0 && state.presence < 0.8f;  // not on a flicker at the edge of a light
-					const bool unwanted = outOfDark || (a.kind != Apparition::Kind::kHermaeusMora && level <= 0.02f) ||
-					                      (a.kind == Apparition::Kind::kInkEye && state.ink != 1 && state.ink != 2);
+					const bool outOfDark = !state.dark && state.presence < 0.8f;  // not on a flicker at the edge of a light
+					const bool unwanted = outOfDark || (a.kind != Apparition::Kind::kHermaeusMora && level <= 0.02f);
 					const bool approached = a.kind == Apparition::Kind::kFace && distance < 350.0f;
 					if (a.watched > 2.5f || approached || a.age > a.life || unwanted || (state.gazeT >= 0.0f && a.kind == Apparition::Kind::kFace)) {
 						a.leaving = 0.0f;
 						switch (a.kind) {
 						case Apparition::Kind::kFace:
 							ref->SetGraphVariableFloat("fToggleBlend", 0.0f);  // sinks back into the wall of the dark
-							break;
-						case Apparition::Kind::kInkEye:
-							Papyrus::CallMethod(ref.get(), "DisableNoWait", true);
 							break;
 						case Apparition::Kind::kHermaeusMora:
 							ref->NotifyAnimationGraph("PlayAnim01");  // his vanishing
@@ -687,8 +601,7 @@ namespace Madness
 				if (a.leaving > dark) {
 					RemoveLight(a);
 				}
-				const float gone = a.kind == Apparition::Kind::kInkEye ? 2.0f : 2.4f;
-				if (a.leaving > gone) {
+				if (a.leaving > 2.4f) {
 					RemoveLight(a);
 					Remove(ref.get());
 					a.leaving = 100.0f;
@@ -703,13 +616,13 @@ namespace Madness
 		{
 			if (state.gazeT >= 0.0f) {
 				state.gazeT += a_delta;
-				if (state.gazeT >= kGazeLength || (state.ink == 0 && state.presence <= 0.0f)) {
+				if (state.gazeT >= kGazeLength || (!state.dark && state.presence <= 0.0f)) {
 					state.gazeT = -1.0f;
 					state.gazeIn = kGazeInterval * Random(0.8f, 1.3f);
 				}
 				return;
 			}
-			if (state.eyes < 0.97f || state.ink == 0) {
+			if (state.eyes < 0.97f || !state.dark) {
 				state.gazeIn = -1.0f;
 				return;
 			}
@@ -742,18 +655,18 @@ namespace Madness
 				return;
 			}
 			std::scoped_lock guard(lock);
-			state.inkIn -= a_delta;
-			if (state.inkIn <= 0.0f) {
-				state.inkIn = 0.1f;
-				const int ink = InkState(player);
-				if (ink != state.ink) {
-					constexpr std::array names{ "Out of the dark", "Wading in the ink", "Swimming in the ink", "In the darkness of the Black Book" };
-					logs::info("{} (light level {:.0f}, exposure {:.1f} s)", names[static_cast<std::size_t>(ink)], state.lightLevel, state.exposure);
-					state.ink = ink;
+			state.darkIn -= a_delta;
+			if (state.darkIn <= 0.0f) {
+				state.darkIn = 0.1f;
+				const bool dark = InBookDarkness(player);
+				if (dark != state.dark) {
+					logs::info("{} (light level {:.0f}, exposure {:.1f} s)", dark ? "In the darkness of the Black Book" : "Out of the dark",
+						state.lightLevel, state.exposure);
+					state.dark = dark;
 				}
 			}
-			const int ink = state.ink;
-			if (ink == 0 && state.quiet) {
+			const bool dark = state.dark;
+			if (!dark && state.quiet) {
 				return;  // out of the dark and nothing left to fade
 			}
 			const auto view = CameraView();
@@ -761,8 +674,8 @@ namespace Madness
 				return;
 			}
 
-			if (ink > 0) {
-				state.exposure = std::min(state.exposure + a_delta * (ink == 2 ? kSwimmingMult : 1.0f), kEyesFull + 6.0f);
+			if (dark) {
+				state.exposure = std::min(state.exposure + a_delta, kEyesFull + 6.0f);
 				state.presence = 1.0f;
 			} else if (state.presence > 0.0f) {
 				// out of the dark: everything fades out over kFadeOutTime, then the mind is clear again
@@ -776,7 +689,7 @@ namespace Madness
 			const float e = state.exposure;
 			const auto  level = [&](float a_current, float a_target, float a_rate) {
 				a_target *= state.presence;
-				return a_target < a_current && ink == 0 ? a_target : Approach(a_current, a_target, a_rate, a_delta);
+				return a_target < a_current && !dark ? a_target : Approach(a_current, a_target, a_rate, a_delta);
 			};
 			state.whisper = level(state.whisper, Ramp(e, kWhispersStart, kWhispersFull), 1.5f);
 			state.vision = level(state.vision, Ramp(e, kVisionStart, kVisionFull), 1.0f);
@@ -790,10 +703,10 @@ namespace Madness
 				state.lastStage = stage;
 				Announce(API::kStage, &data, sizeof(data));
 			}
-			if (ink > 0) {
+			if (dark) {
 				state.announceIn -= a_delta;
 				if (state.announceIn <= 0.0f) {
-					API::DarknessData data{ ink, stage, e, 1.0f };
+					API::DarknessData data{ API::kBookDarkness, stage, e, 1.0f };
 					state.announceIn += 1.0f;
 					Announce(API::kDarkness, &data, sizeof(data));
 				}
@@ -882,16 +795,11 @@ namespace Madness
 
 	void Init()
 	{
-		forms.inkShallow = Lookup<RE::EffectSetting>(kInkShallowEffect, kDragonborn);
-		forms.inkSwimming = Lookup<RE::EffectSetting>(kInkSwimmingEffect, kDragonborn);
-		if (!forms.inkShallow || !forms.inkSwimming) {
-			logs::error("Dragonborn's ink damage effects not found: is Dragonborn.esm loaded?");
+		if (!REL::Module::IsAE()) {
+			logs::error("Not the Anniversary Edition: the darkness of the Black Books cannot be detected, the mod is off");
+			return;
 		}
-		if (REL::Module::IsAE()) {
-			forms.bookLightTrigger = LookupBound(kBookLightTrigger, kDragonborn);
-		} else {
-			logs::warn("Not the Anniversary Edition: the darkness of the Black Books is not detected, only the ink");
-		}
+		forms.bookLightTrigger = LookupBound(kBookLightTrigger, kDragonborn);
 		for (const auto id : kFaces) {
 			if (const auto face = LookupBound(id, kDragonborn)) {
 				forms.faces.push_back(face);
@@ -919,11 +827,10 @@ namespace Madness
 		if (forms.whispers.empty() || !forms.imod) {
 			logs::error("{} not loaded (or incomplete): no sounds and no green nightmare", kPlugin);
 		}
-		logs::info("Forms: book darkness trigger {}, ink effects {}/{}, faces {}, ink eye {}, Hermaeus Mora {}, imod {}, {} whispers, ambient sounds {}",
-			forms.bookLightTrigger != nullptr, forms.inkShallow != nullptr, forms.inkSwimming != nullptr, forms.faces.size(), forms.inkEye != nullptr, forms.hermaeusMora != nullptr,
-			forms.imod != nullptr, forms.whispers.size(),
+		logs::info("Forms: book darkness trigger {}, faces {}, Hermaeus Mora {}, imod {}, {} whispers, ambient sounds {}",
+			forms.bookLightTrigger != nullptr, forms.faces.size(), forms.hermaeusMora != nullptr, forms.imod != nullptr, forms.whispers.size(),
 			forms.bed && forms.soulCairn && forms.wordWall && forms.heartbeat && forms.gaze && forms.bookHum && forms.rumble);
-		ready = forms.bookLightTrigger || forms.inkShallow || forms.inkSwimming;
+		ready = forms.bookLightTrigger != nullptr;
 	}
 
 	void Reset()
@@ -937,8 +844,8 @@ namespace Madness
 		state.apparitions.clear();  // they belong to the world being left; a save that kept them is cleaned on load
 		state.exposure = 0.0f;
 		state.presence = 0.0f;
-		state.ink = 0;
-		state.inkIn = 0.0f;
+		state.dark = false;
+		state.darkIn = 0.0f;
 		state.quiet = true;
 		state.scannedCell = nullptr;
 		state.darknessCell = false;

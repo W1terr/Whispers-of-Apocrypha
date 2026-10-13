@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3
+
+- The madness now comes only from the dark spots of the Black Book levels. The ink water of Apocrypha no longer counts,
+  and the eyes that rose from the ink are gone with it.
+- Eyes left in a save made with an older version are still cleaned up when it loads.
+
 ## 1.2
 
 - Built-in support for **Stress and Fear - A Dynamic Sanity System**. It turns on by itself when Stress and Fear is

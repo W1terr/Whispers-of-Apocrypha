@@ -1,8 +1,8 @@
 # Whispers of Apocrypha
 
 A Lovecraft-inspired SKSE plugin for Skyrim Anniversary Edition (Dragonborn). The darkness of Apocrypha slowly breaks
-your mind: the dark outside the moving lights of the Black Book levels (where the vanilla game drains your health while
-your light level is below 30) and the black ink water.
+your mind: the dark spots outside the moving lights of the Black Book levels, where the vanilla game drains your health
+while your light level is below 30. The ink water of Apocrypha does not count.
 
 The longer you stay in the dark, the deeper it goes:
 
@@ -11,8 +11,7 @@ The longer you stay in the dark, the deeper it goes:
 2. **The green nightmare** (after 3 s): Skyrim's own `DA16DreamState` image space (Vaermina's nightmare: blurred edges,
    bloom) turned sickly green, growing with your madness. The word wall chant joins the whispers.
 3. **The eyes** (after 8 s): Hermaeus Mora's faces full of eyes, the ones from the walls of Apocrypha, emerge in the
-   dark around you, and eyes rise from the ink. Stare at one, or walk up to it, and it sinks back into the dark. Your
-   heart starts to pound.
+   dark around you. Stare at one, or walk up to it, and it sinks back into the dark. Your heart starts to pound.
 4. **The gaze** (after 18 s): Hermaeus Mora himself appears in front of you and tells you he sees you.
 
 Step back into the light and it all fades away within 2.4 seconds.
