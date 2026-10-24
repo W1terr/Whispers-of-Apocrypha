@@ -1,8 +1,8 @@
 # Whispers of Apocrypha
 
-A Lovecraft-inspired SKSE plugin for Skyrim Anniversary Edition (Dragonborn). The darkness of Apocrypha slowly breaks
-your mind: the dark spots outside the moving lights of the Black Book levels, where the vanilla game drains your health
-while your light level is below 30. The ink water of Apocrypha does not count.
+A Lovecraft-inspired SKSE plugin for Skyrim Special and Anniversary Edition (Dragonborn). The darkness of Apocrypha
+slowly breaks your mind: the dark spots outside the moving lights of the Black Book levels, where the vanilla game drains
+your health while your light level is below 30. The ink water of Apocrypha does not count.
 
 The longer you stay in the dark, the deeper it goes:
 
@@ -38,7 +38,7 @@ once a second in the dark, on every madness stage change and when Hermaeus Mora 
 
 ## Requirements
 
-- Skyrim Anniversary Edition (1.6.1130+ / 1.7) with Dragonborn
+- Skyrim Special Edition 1.5.97 or Anniversary Edition (1.6 / 1.7) with Dragonborn
 - [SKSE](https://skse.silverlock.org/)
 - [Address Library for SKSE Plugins](https://www.nexusmods.com/skyrimspecialedition/mods/32444)
 

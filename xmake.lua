@@ -13,7 +13,7 @@ add_rules("mode.debug", "mode.releasedbg")
 
 -- define targets
 target("WhispersOfApocrypha")
-    set_version("1.3.0")
+    set_version("2.2.0")
     add_rules("commonlibsse-ng.plugin", {
         name = "WhispersOfApocrypha",
         author = "W1ter",

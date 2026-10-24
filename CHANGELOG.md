@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2
+
+- Works on Skyrim Special Edition 1.5.97 too. The dark is now found with the game's own light level condition
+  (the one the Black Book script uses), so the same plugin runs on SE and AE.
+
 ## 1.3
 
 - The madness now comes only from the dark spots of the Black Book levels. The ink water of Apocrypha no longer counts,
