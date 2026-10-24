@@ -43,6 +43,8 @@ namespace Madness
 		constexpr RE::FormID kRumble = 0x886;
 		constexpr RE::FormID kMadnessImod = 0x890;  // DA16DreamState turned green
 
+		constexpr RE::FormID kActiveDarkness = 0x900;  // global variable to track darkness
+
 		constexpr std::uint32_t kSerializationID = 'WOAP';
 		constexpr std::uint32_t kRecordRefs = 'REFS';
 		constexpr std::uint32_t kSerializationVersion = 1;
@@ -79,6 +81,7 @@ namespace Madness
 			RE::BGSSoundDescriptorForm*              gaze{ nullptr };
 			RE::BGSSoundDescriptorForm*              bookHum{ nullptr };
 			RE::BGSSoundDescriptorForm*              rumble{ nullptr };
+			RE::TESGlobal*                           activeDarkness{ nullptr };
 		} forms;
 
 		// a looping sound whose volume follows a level; started and stopped as the level crosses zero
@@ -246,15 +249,6 @@ namespace Madness
 			return View{ camera->world.translate, { m.entry[0][0], m.entry[1][0], m.entry[2][0] } };
 		}
 
-		// Actor::GetLightLevel, what the GetLightLevel condition and Papyrus function return (Anniversary Edition id;
-		// on older runtimes the mod stays off, see Init)
-		float LightLevel(RE::Actor* a_actor)
-		{
-			using func_t = float(RE::Actor*);
-			static REL::Relocation<func_t> func{ REL::ID(37775) };
-			return func(a_actor);
-		}
-
 		// in a Black Book level, out of the light: exactly where its trigger script hurts the player (it checks the light
 		// level every 0.1 s too)
 		bool InBookDarkness(RE::PlayerCharacter* a_player)
@@ -276,8 +270,10 @@ namespace Madness
 			if (!state.darknessCell) {
 				return false;
 			}
-			state.lightLevel = LightLevel(a_player);
-			return state.lightLevel < kDarkLightLevel;
+
+			float currentValue = forms.activeDarkness->value;
+
+			return currentValue > 0.0f;
 		}
 
 		// to the built-in Stress and Fear support and to the plugins listening (API.h)
@@ -660,8 +656,8 @@ namespace Madness
 				state.darkIn = 0.1f;
 				const bool dark = InBookDarkness(player);
 				if (dark != state.dark) {
-					logs::info("{} (light level {:.0f}, exposure {:.1f} s)", dark ? "In the darkness of the Black Book" : "Out of the dark",
-						state.lightLevel, state.exposure);
+					logs::info("{} (exposure {:.1f} s)", dark ? "In the darkness of the Black Book" : "Out of the dark",
+						state.exposure);
 					state.dark = dark;
 				}
 			}
@@ -795,8 +791,9 @@ namespace Madness
 
 	void Init()
 	{
-		if (!REL::Module::IsAE()) {
-			logs::error("Not the Anniversary Edition: the darkness of the Black Books cannot be detected, the mod is off");
+		forms.activeDarkness = Lookup<RE::TESGlobal>(kActiveDarkness, kPlugin);
+		if (!forms.activeDarkness) {
+			logs::error("Failed to load darkness state variable, the mod is off");
 			return;
 		}
 		forms.bookLightTrigger = LookupBound(kBookLightTrigger, kDragonborn);
